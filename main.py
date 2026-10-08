@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import requests
@@ -6,6 +7,19 @@ from bs4 import BeautifulSoup
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import google.generativeai as genai
+
+# ==========================================
+# 0. HELPER PARA LIMPIAR IDS DE GOOGLE
+# ==========================================
+def limpiar_id(valor):
+    """Extrae el ID alfanumérico limpio de Google Drive/Sheets/Slides aunque le pasen una URL completa."""
+    if not valor:
+        return ""
+    valor = str(valor).strip()
+    match = re.search(r'/(?:folders|d)/([a-zA-Z0-9_-]+)', valor)
+    if match:
+        return match.group(1)
+    return valor.split('?')[0].split('#')[0].split('/')[-1]
 
 # ==========================================
 # 1. CONFIGURACIÓN E INICIALIZACIÓN
@@ -16,13 +30,13 @@ SCOPES = [
     'https://www.googleapis.com/auth/presentations'
 ]
 
-# ID del Google Sheets "Cerebro" (se lee de variables de entorno o configuración)
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1mkGYrHHU5GLUAtJUvZ-lXLGyy9826Cy36Mfh4q0d9wg")
+# ID del Archivo Maestro en Google Sheets
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1ot0s5zwweQuSZEyFoLR3oFRT2YvJXf8C")
 
 def obtener_servicios_google():
     """Autentica la cuenta de servicio y retorna los clientes API necesarios."""
     if not os.path.exists('service_account.json'):
-        raise FileNotFoundError("No se encontró service_account.json. Verifica la variable de entorno GOOGLE_CREDENTIALS.")
+        raise FileNotFoundError("No se encontró service_account.json. Verifica la variable GOOGLE_CREDENTIALS.")
     
     creds = Credentials.from_service_account_file('service_account.json', scopes=SCOPES)
     drive = build('drive', 'v3', credentials=creds)
@@ -39,28 +53,28 @@ def configurar_gemini():
     return genai.GenerativeModel('gemini-1.5-flash')
 
 # ==========================================
-# 2. LECTURA DEL CEREBRO (GOOGLE SHEETS)
+# 2. LECTURA DEL ARCHIVO MAESTRO
 # ==========================================
-def leer_cerebro(sheets_service, spreadsheet_id):
-    """Lee todas las pestañas de configuración del Google Sheets."""
-    print("🧠 Leyendo configuración del Google Sheets Cerebro...")
+def leer_archivo_maestro(sheets_service, spreadsheet_id):
+    """Lee todas las pestañas de configuración del Google Sheets Archivo Maestro."""
+    print("🧠 Leyendo configuración del Archivo Maestro...")
     sheet = sheets_service.spreadsheets()
     
     # 1. Parámetros
-    res_param = sheet.values().get(spreadsheetId=spreadsheet_id, range='PARÁMETROS!A2:C20').execute()
+    res_param = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='PARÁMETROS!A2:C20').execute()
     rows_param = res_param.get('values', [])
     parametros = {row[0]: row[1] for row in rows_param if len(row) >= 2}
     
     # 2. Marcas
-    res_marcas = sheet.values().get(spreadsheetId=spreadsheet_id, range='MARCAS!A2:H50').execute()
+    res_marcas = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='MARCAS!A2:H50').execute()
     marcas = res_marcas.get('values', [])
     
     # 3. Promociones
-    res_promo = sheet.values().get(spreadsheetId=spreadsheet_id, range='PROMOCIONES!A2:F50').execute()
+    res_promo = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='PROMOCIONES!A2:F50').execute()
     promociones = res_promo.get('values', [])
     
     # 4. Efemérides
-    res_efe = sheet.values().get(spreadsheetId=spreadsheet_id, range='EFEMÉRIDES!A2:E20').execute()
+    res_efe = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='EFEMÉRIDES!A2:E20').execute()
     efemerides = res_efe.get('values', [])
     
     return parametros, marcas, promociones, efemerides
@@ -78,7 +92,6 @@ def extraer_productos_kyma(url_catalogo, skus_autorizados):
         response = requests.get(url_catalogo, headers=headers, timeout=10)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            # Extraer imágenes y títulos del HTML de KYMA
             elementos = soup.find_all(['article', 'div'], class_=lambda c: c and ('product' in c or 'card' in c))
             
             for idx, el in enumerate(elementos[:5]):
@@ -98,11 +111,12 @@ def extraer_productos_kyma(url_catalogo, skus_autorizados):
                         'url_origen': url_catalogo,
                         'media_url': img_url,
                         'tipo_media': 'imagen',
-                        'sku_relacionado': skus_autorizados[:50]
+                        'sku_relacionado': str(skus_autorizados)[:50]
                     })
     except Exception as e:
         print(f"⚠️ Nota en scraping KYMA: {e}")
-        # Candidato fallback estructurado si la web requiere renderizado JS
+        
+    if not candidatos:
         candidatos.append({
             'marca': 'KYMA',
             'titulo': 'Cuadernos y Libretas KYMA - Colección Quincena del Ahorro',
@@ -142,7 +156,7 @@ def extraer_efemerides_dia_muertos():
 # 4. ADAPTACIÓN DE COPIES CON GEMINI AI
 # ==========================================
 def generar_copy_olinka(model, candidato, promocion, parametros):
-    """Genera el copy comercial con Inteligencia Artificial Gemini en el tono de Olinka."""
+    """Genera el copy comercial con IA Gemini en el tono de Olinka."""
     print(f"🤖 Generando copy con Gemini para: {candidato['titulo']}...")
     
     prompt = f"""
@@ -182,8 +196,9 @@ def crear_carpeta_drive(drive_service, nombre, id_padre=None):
         'name': nombre,
         'mimeType': 'application/vnd.google-apps.folder'
     }
-    if id_padre:
-        metadata['parents'] = [id_padre]
+    id_padre_limpio = limpiar_id(id_padre)
+    if id_padre_limpio:
+        metadata['parents'] = [id_padre_limpio]
         
     folder = drive_service.files().create(body=metadata, fields='id').execute()
     return folder.get('id')
@@ -195,15 +210,13 @@ def crear_presentacion_reporte(slides_service, drive_service, id_carpeta_destino
     """Crea la presentación en Google Slides con la parrilla de contenidos e índice de aprobación."""
     print("📊 Generando presentación de aprobación en Google Slides...")
     
-    # 1. Crear nueva presentación
     body = {'title': 'OLINKA - Parrilla de Contenidos Aprobación Quincena Noviembre 2026'}
     presentation = slides_service.presentations().create(body=body).execute()
     presentation_id = presentation.get('presentationId')
     
-    # 2. Mover la presentación a la carpeta de Drive
     drive_service.files().update(
         fileId=presentation_id,
-        addParents=id_carpeta_destino,
+        addParents=limpiar_id(id_carpeta_destino),
         removeParents='root',
         fields='id, parents'
     ).execute()
@@ -223,9 +236,11 @@ def main():
     drive_service, sheets_service, slides_service = obtener_servicios_google()
     gemini_model = configurar_gemini()
     
-    # 2. Leer Cerebro
-    parametros, marcas, promociones, efemerides = leer_cerebro(sheets_service, SPREADSHEET_ID)
-    id_carpeta_raiz = parametros.get('ID_CARPETA_DRIVE', '1WT2l0Qeinq6iC0vS9m07NFSWZDqOjTnt')
+    # 2. Leer Archivo Maestro
+    parametros, marcas, promociones, efemerides = leer_archivo_maestro(sheets_service, SPREADSHEET_ID)
+    
+    raw_drive_id = parametros.get('ID_CARPETA_DRIVE', '')
+    id_carpeta_raiz = limpiar_id(raw_drive_id)
     
     print(f"📂 Carpeta Raíz de Drive asociada: {id_carpeta_raiz}")
     
@@ -248,7 +263,6 @@ def main():
                 cands = extraer_contenidos_acco(skus)
                 todos_candidatos.extend(cands)
                 
-    # Extraer Efeméride Día de Muertos
     todos_candidatos.extend(extraer_efemerides_dia_muertos())
     
     # 5. Generar Copies y Estructurar Entregables
