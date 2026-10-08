@@ -1,0 +1,8 @@
+# Ignorar credenciales y variables de entorno
+service_account.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
