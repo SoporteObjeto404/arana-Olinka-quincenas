@@ -7,7 +7,7 @@ import google.generativeai as genai
 
 # CONFIGURACIÓN
 SCOPES = ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/presentations']
-SPREADSHEET_ID = 'REEMPLAZAR_CON_EL_ID_DE_TU_GOOGLE_SHEETS'
+SPREADSHEET_ID = 'https://docs.google.com/spreadsheets/d/13dFK6-Bp66B9raDIoPbFZljAmz3u5ww5/edit?gid=2046029067#gid=2046029067'
 
 def main():
     print("🚀 INICIANDO ARAÑA DE CONTENIDOS OLINKA 🚀")
