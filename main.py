@@ -17,7 +17,7 @@ SCOPES = [
 ]
 
 # ID del Google Sheets "Cerebro" (se lee de variables de entorno o configuración)
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1b-aINClYfQVPyCnuR7mu-WHF2r2D-ev0")
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1ot0s5zwweQuSZEyFoLR3oFRT2YvJXf8C")
 
 def obtener_servicios_google():
     """Autentica la cuenta de servicio y retorna los clientes API necesarios."""
