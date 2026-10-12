@@ -37,7 +37,7 @@ SCOPES = [
     'https://www.googleapis.com/auth/presentations'
 ]
 
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1MI3DotkWXQcf8tAVA2PH2UteQ7Q9oH5LOH3i98uQigM")
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1VqaYwfy1JkOpD9uupawNGm4htKlVh9Gq")
 
 def obtener_servicios_google():
     """Autentica la cuenta de servicio y retorna los clientes API necesarios."""
