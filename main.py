@@ -6,7 +6,14 @@ import requests
 from bs4 import BeautifulSoup
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-import google.generativeai as genai
+
+# Importación segura de Gemini API
+try:
+    from google import genai
+    USE_NEW_SDK = True
+except ImportError:
+    import google.generativeai as genai
+    USE_NEW_SDK = False
 
 # ==========================================
 # 0. HELPER PARA LIMPIAR IDS DE GOOGLE
@@ -30,7 +37,6 @@ SCOPES = [
     'https://www.googleapis.com/auth/presentations'
 ]
 
-# ID del Archivo Maestro en Google Sheets
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1MI3DotkWXQcf8tAVA2PH2UteQ7Q9oH5LOH3i98uQigM")
 
 def obtener_servicios_google():
@@ -45,12 +51,16 @@ def obtener_servicios_google():
     return drive, sheets, slides
 
 def configurar_gemini():
-    """Inicializa la API de Gemini."""
+    """Inicializa el cliente de Gemini."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("No se encontró la variable GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-1.5-flash')
+    
+    if USE_NEW_SDK:
+        return genai.Client(api_key=api_key)
+    else:
+        genai.configure(api_key=api_key)
+        return genai
 
 # ==========================================
 # 2. LECTURA DEL ARCHIVO MAESTRO
@@ -59,22 +69,23 @@ def leer_archivo_maestro(sheets_service, spreadsheet_id):
     """Lee todas las pestañas de configuración del Google Sheets Archivo Maestro."""
     print("🧠 Leyendo configuración del Archivo Maestro...")
     sheet = sheets_service.spreadsheets()
+    sheet_id_limpio = limpiar_id(spreadsheet_id)
     
     # 1. Parámetros
-    res_param = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='PARÁMETROS!A2:C20').execute()
+    res_param = sheet.values().get(spreadsheetId=sheet_id_limpio, range='PARÁMETROS!A2:C20').execute()
     rows_param = res_param.get('values', [])
     parametros = {row[0]: row[1] for row in rows_param if len(row) >= 2}
     
     # 2. Marcas
-    res_marcas = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='MARCAS!A2:H50').execute()
+    res_marcas = sheet.values().get(spreadsheetId=sheet_id_limpio, range='MARCAS!A2:H50').execute()
     marcas = res_marcas.get('values', [])
     
     # 3. Promociones
-    res_promo = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='PROMOCIONES!A2:F50').execute()
+    res_promo = sheet.values().get(spreadsheetId=sheet_id_limpio, range='PROMOCIONES!A2:F50').execute()
     promociones = res_promo.get('values', [])
     
     # 4. Efemérides
-    res_efe = sheet.values().get(spreadsheetId=limpiar_id(spreadsheet_id), range='EFEMÉRIDES!A2:E20').execute()
+    res_efe = sheet.values().get(spreadsheetId=sheet_id_limpio, range='EFEMÉRIDES!A2:E20').execute()
     efemerides = res_efe.get('values', [])
     
     return parametros, marcas, promociones, efemerides
@@ -155,8 +166,8 @@ def extraer_efemerides_dia_muertos():
 # ==========================================
 # 4. ADAPTACIÓN DE COPIES CON GEMINI AI
 # ==========================================
-def generar_copy_olinka(model, candidato, promocion, parametros):
-    """Genera el copy comercial con IA Gemini en el tono de Olinka."""
+def generar_copy_olinka(gemini_client, candidato, promocion, parametros):
+    """Genera el copy comercial con Inteligencia Artificial Gemini en el tono de Olinka."""
     print(f"🤖 Generando copy con Gemini para: {candidato['titulo']}...")
     
     prompt = f"""
@@ -176,16 +187,27 @@ def generar_copy_olinka(model, candidato, promocion, parametros):
     Escribe directamente el texto del post final listo para publicar.
     """
     
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"❌ Error al llamar a Gemini API: {e}")
-        return (f"✨ ¡Aprovecha la Quincena del Ahorro en Olinka! ✨\n\n"
-                f"Encuentra lo mejor de {candidato['marca']} con promociones exclusivas. {promocion}\n\n"
-                f"📲 Pide directo por WhatsApp: {parametros.get('WHATSAPP_OLINKA', '777 208 6198')}\n"
-                f"🌐 Visítanos en: {parametros.get('SITIO_WEB_OLINKA', 'https://olinkapapelerias.com')}\n\n"
-                f"{parametros.get('HASHTAGS_BASE', '#Olinka #QuincenaDelAhorro #Papeleria')}")
+    # Modelos a probar en orden de prioridad
+    modelos_disponibles = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    
+    for mod in modelos_disponibles:
+        try:
+            if USE_NEW_SDK:
+                res = gemini_client.models.generate_content(model=mod, contents=prompt)
+                return res.text.strip()
+            else:
+                m = gemini_client.GenerativeModel(mod)
+                res = m.generate_content(prompt)
+                return res.text.strip()
+        except Exception as ex:
+            continue
+
+    # Fallback elegante si no responde la API
+    return (f"✨ ¡Aprovecha la Quincena del Ahorro en Olinka! ✨\n\n"
+            f"Encuentra lo mejor de {candidato['marca']} ({candidato['titulo']}) con promociones exclusivas. {promocion}\n\n"
+            f"📲 Pide directo por WhatsApp: {parametros.get('WHATSAPP_OLINKA', '777 208 6198')}\n"
+            f"🌐 Visítanos en: {parametros.get('SITIO_WEB_OLINKA', 'https://olinkapapelerias.com')}\n\n"
+            f"{parametros.get('HASHTAGS_BASE', '#Olinka #QuincenaDelAhorro #Papeleria')}")
 
 # ==========================================
 # 5. CREACIÓN DE ESTRUCTURA EN GOOGLE DRIVE
@@ -214,12 +236,14 @@ def crear_presentacion_reporte(slides_service, drive_service, id_carpeta_destino
     presentation = slides_service.presentations().create(body=body).execute()
     presentation_id = presentation.get('presentationId')
     
-    drive_service.files().update(
-        fileId=presentation_id,
-        addParents=limpiar_id(id_carpeta_destino),
-        removeParents='root',
-        fields='id, parents'
-    ).execute()
+    id_destino_limpio = limpiar_id(id_carpeta_destino)
+    if id_destino_limpio:
+        drive_service.files().update(
+            fileId=presentation_id,
+            addParents=id_destino_limpio,
+            removeParents='root',
+            fields='id, parents'
+        ).execute()
     
     print(f"✅ Presentación creada en Slides con ID: {presentation_id}")
     return presentation_id
@@ -234,7 +258,7 @@ def main():
     
     # 1. Inicializar servicios
     drive_service, sheets_service, slides_service = obtener_servicios_google()
-    gemini_model = configurar_gemini()
+    gemini_client = configurar_gemini()
     
     # 2. Leer Archivo Maestro
     parametros, marcas, promociones, efemerides = leer_archivo_maestro(sheets_service, SPREADSHEET_ID)
@@ -269,7 +293,7 @@ def main():
     print(f"⚡ Procesando {len(todos_candidatos)} candidatos con Gemini AI...")
     for cand in todos_candidatos:
         promo_text = "15% OFF en la Quincena del Ahorro"
-        cand['copy_editado'] = generar_copy_olinka(gemini_model, cand, promo_text, parametros)
+        cand['copy_editado'] = generar_copy_olinka(gemini_client, cand, promo_text, parametros)
     
     # 6. Generar reporte en Google Slides
     id_slides = crear_presentacion_reporte(slides_service, drive_service, id_carpeta_nov, todos_candidatos)
