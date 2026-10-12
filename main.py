@@ -31,7 +31,7 @@ SCOPES = [
 ]
 
 # ID del Archivo Maestro en Google Sheets
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1ot0s5zwweQuSZEyFoLR3oFRT2YvJXf8C")
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1MI3DotkWXQcf8tAVA2PH2UteQ7Q9oH5LOH3i98uQigM")
 
 def obtener_servicios_google():
     """Autentica la cuenta de servicio y retorna los clientes API necesarios."""
