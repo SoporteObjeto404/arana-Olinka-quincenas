@@ -173,7 +173,7 @@ def generar_copy_olinka(gemini_client, candidato, promocion, parametros):
     prompt = f"""
     Eres el estratega de contenido senior de Olinka Papelerías.
     
-    Genera un copy altamente persuasivo para redes sociales basado en este producto/contenido:
+    Genera un copy highly persuasivo para redes sociales basado en este producto/contenido:
     - Marca/Efeméride: {candidato['marca']}
     - Título/Producto: {candidato['titulo']}
     - Promoción Vigente: {promocion}
@@ -187,7 +187,6 @@ def generar_copy_olinka(gemini_client, candidato, promocion, parametros):
     Escribe directamente el texto del post final listo para publicar.
     """
     
-    # Modelos a probar en orden de prioridad
     modelos_disponibles = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
     
     for mod in modelos_disponibles:
@@ -199,10 +198,9 @@ def generar_copy_olinka(gemini_client, candidato, promocion, parametros):
                 m = gemini_client.GenerativeModel(mod)
                 res = m.generate_content(prompt)
                 return res.text.strip()
-        except Exception as ex:
+        except Exception:
             continue
 
-    # Fallback elegante si no responde la API
     return (f"✨ ¡Aprovecha la Quincena del Ahorro en Olinka! ✨\n\n"
             f"Encuentra lo mejor de {candidato['marca']} ({candidato['titulo']}) con promociones exclusivas. {promocion}\n\n"
             f"📲 Pide directo por WhatsApp: {parametros.get('WHATSAPP_OLINKA', '777 208 6198')}\n"
@@ -229,23 +227,22 @@ def crear_carpeta_drive(drive_service, nombre, id_padre=None):
 # 6. CONSTRUCCIÓN DE LA PRESENTACIÓN SLIDES
 # ==========================================
 def crear_presentacion_reporte(slides_service, drive_service, id_carpeta_destino, candidatos_procesados):
-    """Crea la presentación en Google Slides con la parrilla de contenidos e índice de aprobación."""
+    """Crea la presentación en Google Slides directamente dentro de la carpeta destino en Google Drive."""
     print("📊 Generando presentación de aprobación en Google Slides...")
     
-    body = {'title': 'OLINKA - Parrilla de Contenidos Aprobación Quincena Noviembre 2026'}
-    presentation = slides_service.presentations().create(body=body).execute()
-    presentation_id = presentation.get('presentationId')
-    
     id_destino_limpio = limpiar_id(id_carpeta_destino)
-    if id_destino_limpio:
-        drive_service.files().update(
-            fileId=presentation_id,
-            addParents=id_destino_limpio,
-            removeParents='root',
-            fields='id, parents'
-        ).execute()
     
-    print(f"✅ Presentación creada en Slides con ID: {presentation_id}")
+    # Creación directa mediante Drive API para garantizar permisos y cuotas
+    body = {
+        'name': 'OLINKA - Parrilla de Contenidos Aprobación Quincena Noviembre 2026',
+        'mimeType': 'application/vnd.google-apps.presentation',
+        'parents': [id_destino_limpio] if id_destino_limpio else []
+    }
+    
+    presentation_file = drive_service.files().create(body=body, fields='id').execute()
+    presentation_id = presentation_file.get('id')
+    
+    print(f"✅ Presentación creada exitosamente en Slides con ID: {presentation_id}")
     return presentation_id
 
 # ==========================================
