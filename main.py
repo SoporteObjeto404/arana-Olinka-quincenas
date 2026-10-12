@@ -173,7 +173,7 @@ def generar_copy_olinka(gemini_client, candidato, promocion, parametros):
     prompt = f"""
     Eres el estratega de contenido senior de Olinka Papelerías.
     
-    Genera un copy highly persuasivo para redes sociales basado en este producto/contenido:
+    Genera un copy altamente persuasivo para redes sociales basado en este producto/contenido:
     - Marca/Efeméride: {candidato['marca']}
     - Título/Producto: {candidato['titulo']}
     - Promoción Vigente: {promocion}
@@ -226,21 +226,31 @@ def crear_carpeta_drive(drive_service, nombre, id_padre=None):
 # ==========================================
 # 6. CONSTRUCCIÓN DE LA PRESENTACIÓN SLIDES
 # ==========================================
-def crear_presentacion_reporte(slides_service, drive_service, id_carpeta_destino, candidatos_procesados):
-    """Crea la presentación en Google Slides directamente dentro de la carpeta destino en Google Drive."""
-    print("📊 Generando presentación de aprobación en Google Slides...")
+def crear_presentacion_reporte(slides_service, drive_service, id_carpeta_destino, id_plantilla, candidatos_procesados):
+    """Crea la presentación en Google Slides duplicando la plantilla maestra configurada."""
+    print("📊 Generando presentación de aprobación en Google Slides desde plantilla...")
     
     id_destino_limpio = limpiar_id(id_carpeta_destino)
+    id_plantilla_limpia = limpiar_id(id_plantilla)
     
-    # Creación directa mediante Drive API para garantizar permisos y cuotas
     body = {
         'name': 'OLINKA - Parrilla de Contenidos Aprobación Quincena Noviembre 2026',
-        'mimeType': 'application/vnd.google-apps.presentation',
         'parents': [id_destino_limpio] if id_destino_limpio else []
     }
     
-    presentation_file = drive_service.files().create(body=body, fields='id').execute()
-    presentation_id = presentation_file.get('id')
+    if id_plantilla_limpia:
+        # Al hacer un copy de la plantilla existente, evitamos restricciones de cuota 0 de la Service Account
+        presentation_file = drive_service.files().copy(
+            fileId=id_plantilla_limpia,
+            body=body,
+            fields='id'
+        ).execute()
+        presentation_id = presentation_file.get('id')
+    else:
+        # Fallback si no hay plantilla configurada
+        body['mimeType'] = 'application/vnd.google-apps.presentation'
+        presentation_file = drive_service.files().create(body=body, fields='id').execute()
+        presentation_id = presentation_file.get('id')
     
     print(f"✅ Presentación creada exitosamente en Slides con ID: {presentation_id}")
     return presentation_id
@@ -261,6 +271,8 @@ def main():
     parametros, marcas, promociones, efemerides = leer_archivo_maestro(sheets_service, SPREADSHEET_ID)
     
     raw_drive_id = parametros.get('ID_CARPETA_DRIVE', '')
+    raw_slides_id = parametros.get('ID_PLANTILLA_SLIDES', '')
+    
     id_carpeta_raiz = limpiar_id(raw_drive_id)
     
     print(f"📂 Carpeta Raíz de Drive asociada: {id_carpeta_raiz}")
@@ -293,7 +305,7 @@ def main():
         cand['copy_editado'] = generar_copy_olinka(gemini_client, cand, promo_text, parametros)
     
     # 6. Generar reporte en Google Slides
-    id_slides = crear_presentacion_reporte(slides_service, drive_service, id_carpeta_nov, todos_candidatos)
+    id_slides = crear_presentacion_reporte(slides_service, drive_service, id_carpeta_nov, raw_slides_id, todos_candidatos)
     
     print("==================================================")
     print("✅ EJECUCIÓN CONCLUIDA CON ÉXITO")
