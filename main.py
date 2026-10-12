@@ -108,26 +108,3 @@ def extraer_productos_kyma(url_catalogo, skus_autorizados):
             for idx, el in enumerate(elementos[:5]):
                 img_tag = el.find('img')
                 title_tag = el.find(['h2', 'h3', 'a', 'span'])
-                
-                img_url = img_tag.get('src') or img_tag.get('data-src') if img_tag else ""
-                if img_url and img_url.startswith('//'):
-                    img_url = 'https:' + img_url
-                
-                titulo = title_tag.get_text(strip=True) if title_tag else f"Producto KYMA {idx+1}"
-                
-                if img_url:
-                    candidatos.append({
-                        'marca': 'KYMA',
-                        'titulo': titulo,
-                        'url_origen': url_catalogo,
-                        'media_url': img_url,
-                        'tipo_media': 'imagen',
-                        'sku_relacionado': str(skus_autorizados)[:50]
-                    })
-    except Exception as e:
-        print(f"⚠️ Nota en scraping KYMA: {e}")
-        
-    if not candidatos:
-        candidatos.append({
-            'marca': 'KYMA',
-            'titulo': 'Cuadernos y Libretas KYMA - Colección Quincena del
