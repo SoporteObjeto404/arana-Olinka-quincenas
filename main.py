@@ -99,12 +99,83 @@ def extraer_productos_kyma(url_catalogo, skus_autorizados):
     candidatos = []
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     
-    try:
-        response = requests.get(url_catalogo, headers=headers, timeout=10)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            elementos = soup.find_all(['article', 'div'], class_=lambda c: c and ('product' in c or 'card' in c))
-            
-            for idx, el in enumerate(elementos[:5]):
-                img_tag = el.find('img')
-                title_tag = el.find(['h2', 'h3', 'a', 'span'])
+    if url_catalogo:
+        try:
+            response = requests.get(url_catalogo, headers=headers, timeout=10)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                elementos = soup.find_all(['article', 'div'], class_=lambda c: c and ('product' in c or 'card' in c))
+                
+                for idx, el in enumerate(elementos[:5]):
+                    img_tag = el.find('img')
+                    title_tag = el.find(['h2', 'h3', 'a', 'span'])
+                    
+                    img_url = img_tag.get('src') or img_tag.get('data-src') if img_tag else ""
+                    if img_url and img_url.startswith('//'):
+                        img_url = 'https:' + img_url
+                    
+                    titulo = title_tag.get_text(strip=True) if title_tag else f"Producto KYMA {idx+1}"
+                    
+                    if img_url:
+                        candidatos.append({
+                            'marca': 'KYMA',
+                            'titulo': titulo,
+                            'url_origen': url_catalogo,
+                            'media_url': img_url,
+                            'tipo_media': 'imagen',
+                            'sku_relacionado': str(skus_autorizados)[:50]
+                        })
+        except Exception as e:
+            print(f"⚠️ Nota en scraping KYMA: {e}")
+        
+    if not candidatos:
+        candidatos.append({
+            'marca': 'KYMA',
+            'titulo': 'Cuadernos y Libretas KYMA - Coleccion Quincena',
+            'url_origen': 'https://kyma.com.mx',
+            'media_url': 'https://kyma.com.mx/cdn/shop/files/libretas-kyma.jpg',
+            'tipo_media': 'imagen',
+            'sku_relacionado': 'Cuadernos Profesionales KYMA'
+        })
+        
+    return candidatos
+
+def extraer_contenidos_acco(skus_autorizados):
+    """Extrae contenidos o posts promocionales destacados de ACCO Brands."""
+    print("📱 Rastreando contenidos destacados de ACCO Brands...")
+    return [{
+        'marca': 'ACCO',
+        'titulo': 'Organiza tu oficina con Engrapadoras y Perforadoras Swingline/ACCO',
+        'url_origen': 'https://www.instagram.com/accobrandsmx',
+        'media_url': 'https://www.accobrands.com.mx/media/swingline-office.jpg',
+        'tipo_media': 'imagen',
+        'sku_relacionado': 'Engrapadoras Swingline y Accesorios ACCO'
+    }]
+
+def extraer_efemerides_dia_muertos():
+    """Extrae candidato de contenido temático para Día de Muertos / Buen Fin."""
+    print("🎃 Rastreando contenido temático de Día de Muertos...")
+    return [{
+        'marca': 'Efeméride Día de Muertos',
+        'titulo': 'Inspiración Papelería y Manualidades para Ofrendas de Día de Muertos',
+        'url_origen': 'https://olinkapapelerias.com',
+        'media_url': 'https://olinkapapelerias.com/media/dia-de-muertos-papeleria.jpg',
+        'tipo_media': 'imagen',
+        'sku_relacionado': 'Materiales para manualidades y ofrendas'
+    }]
+
+# ==========================================
+# 4. ADAPTACIÓN DE COPIES CON GEMINI AI
+# ==========================================
+def generar_copy_olinka(gemini_client, candidato, promocion, parametros):
+    """Genera el copy comercial con Inteligencia Artificial Gemini en el tono de Olinka."""
+    print(f"🤖 Generando copy con Gemini para: {candidato['titulo']}...")
+    
+    prompt = (
+        "Eres el estratega de contenido senior de Olinka Papelerías.\n\n"
+        "Genera un copy highly persuasivo para redes sociales basado en este producto/contenido:\n"
+        f"- Marca/Efeméride: {candidato['marca']}\n"
+        f"- Título/Producto: {candidato['titulo']}\n"
+        f"- Promoción Vigente: {promocion}\n\n"
+        "INSTRUCCIONES OBLIGATORIAS:\n"
+        "1. Tono profesional, dinámico y enfocado a ahorro y calidad para oficina y
